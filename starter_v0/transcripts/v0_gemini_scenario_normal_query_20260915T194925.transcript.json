@@ -1,0 +1,30 @@
+{
+  "transcript_id": "v0_gemini_scenario_normal_query_20260915T194925",
+  "scenario_id": "scenario_normal_query",
+  "scenario_description": "Yêu cầu bình thường: Kiểm tra chẩn đoán thiết bị LT-204",
+  "version": "v0",
+  "artifact_version": "v0+p27467914bc4d+t7a776588dbe4",
+  "prompt_hash": "27467914bc4d93574eb1a418b77247c51682e04401c78fb4445c22b9019185a0",
+  "tools_hash": "7a776588dbe4b06b5fbedb49e616e2d2b6e00da2891cd3a685ed3bf1d0d27535",
+  "provider": "gemini",
+  "model": "gemini-3.5-flash",
+  "system_prompt": "D:\\VinAI\\K4-L3-DAY04-T149-PromptEngineeringToolCalling\\starter_v0\\artifacts\\system_prompt.md",
+  "tools": "D:\\VinAI\\K4-L3-DAY04-T149-PromptEngineeringToolCalling\\starter_v0\\artifacts\\tools.yaml",
+  "history_window": 5,
+  "max_tool_rounds": 4,
+  "created_at": "2026-09-15T19:49:25",
+  "updated_at": "2026-09-15T19:49:36",
+  "turns": [
+    {
+      "turn_index": 1,
+      "started_at": "2026-09-15T19:49:25",
+      "user": "Kiểm tra tình trạng thiết bị laptop LT-204 giúp mình.",
+      "status": "provider_error",
+      "assistant_text": null,
+      "rounds": [],
+      "tool_events": [],
+      "error": "ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
+      "ended_at": "2026-09-15T19:49:36"
+    }
+  ]
+}

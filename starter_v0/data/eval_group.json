@@ -1,7 +1,304 @@
 {
   "dataset_id": "day04_v3_helpdesk_group",
   "dataset_role": "group",
-  "description": "Template intentionally left empty. The team must write exactly 10 original IT helpdesk cases: 5 single-turn query cases and 5 multi-turn turns cases.",
-  "allowed_failure_types": ["wrong_tool", "wrong_arg_value", "wrong_boundary", "unnecessary_tool", "out_of_scope", "missing_info"],
-  "cases": []
+  "description": "Team-authored evaluation cases for Track B: 5 single-turn cases (G01-G05) and 5 multi-turn cases (G06-G10) testing tool selection, argument accuracy, context carrying, and confirmation boundaries.",
+  "allowed_failure_types": [
+    "wrong_tool",
+    "wrong_arg_value",
+    "wrong_boundary",
+    "unnecessary_tool",
+    "out_of_scope",
+    "missing_info"
+  ],
+  "cases": [
+    {
+      "id": "G01_sso_staging_status",
+      "phase": "B",
+      "suite": "group",
+      "query": "Hệ thống đăng nhập một lần (SSO) trên môi trường staging hiện có ổn định không?",
+      "failure_type": "wrong_arg_value",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "check_service_status",
+            "args": {
+              "service": "sso",
+              "environment": "staging"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "service_status_staging",
+        "difficulty": "medium",
+        "what_it_tests": "Trích xuất đúng service=sso và environment=staging, không dùng mặc định production."
+      }
+    },
+    {
+      "id": "G02_device_hardware_check",
+      "phase": "B",
+      "suite": "group",
+      "query": "Kiểm tra tình trạng phần cứng và pin của laptop MacBook LT-318 giúp mình.",
+      "failure_type": "wrong_arg_value",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "inspect_device",
+            "args": {
+              "asset_id": "LT-318",
+              "check": "hardware"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "device_hardware_inspection",
+        "difficulty": "medium",
+        "what_it_tests": "Trích đúng asset_id=LT-318 và xác định đúng check=hardware thay vì check=all."
+      }
+    },
+    {
+      "id": "G03_lookup_legal_user",
+      "phase": "B",
+      "suite": "group",
+      "query": "Tra cứu thông tin tài khoản và thiết bị được cấp của nhân sự có mã EMP-1005.",
+      "failure_type": "wrong_tool",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "lookup_user",
+            "args": {
+              "employee_id": "EMP-1005"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "user_directory_lookup",
+        "difficulty": "easy",
+        "what_it_tests": "Nhận diện mã nhân viên và định tuyến chuẩn xác đến lookup_user."
+      }
+    },
+    {
+      "id": "G04_printing_kb_search",
+      "phase": "B",
+      "suite": "group",
+      "query": "Tìm bài viết hướng dẫn cách kết nối và cài đặt driver máy in văn phòng trên Windows.",
+      "failure_type": "wrong_tool",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "search_kb",
+            "args": {
+              "category": "printing"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "kb_category_routing",
+        "difficulty": "medium",
+        "what_it_tests": "Nhận diện yêu cầu hướng dẫn máy in và chọn đúng category=printing trong search_kb."
+      }
+    },
+    {
+      "id": "G05_missing_asset_clarify",
+      "phase": "B",
+      "suite": "group",
+      "query": "Máy tính của mình sáng nay bật không lên màn hình, hãy kiểm tra thiết bị giúp mình.",
+      "failure_type": "missing_info",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "clarify",
+            "args": {
+              "response_type": "text"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "missing_asset_clarification",
+        "difficulty": "hard",
+        "what_it_tests": "Khi thiếu Asset ID, agent phải dùng clarify để hỏi người dùng chứ không được tự đoán bừa mã máy."
+      }
+    },
+    {
+      "id": "G06_multiturn_carry_environment",
+      "phase": "B",
+      "suite": "group",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Kiểm tra xem mạng Wi-Fi trên môi trường staging hiện tại có hoạt động không?"
+        },
+        {
+          "role": "user",
+          "content": "Thế còn dịch vụ in ấn (printing) thì sao?"
+        },
+        {
+          "role": "user",
+          "content": "Đúng rồi, kiểm tra dịch vụ in ấn, vẫn là môi trường staging nhé."
+        }
+      ],
+      "failure_type": "wrong_arg_value",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "check_service_status",
+            "args": {
+              "service": "printing",
+              "environment": "staging"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "multiturn_carry_environment",
+        "difficulty": "hard",
+        "what_it_tests": "Chuyển đổi service sang printing nhưng vẫn duy trì context environment=staging qua các lượt."
+      }
+    },
+    {
+      "id": "G07_multiturn_fill_asset_then_check",
+      "phase": "B",
+      "suite": "group",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Kiểm tra tình trạng laptop làm việc của tôi."
+        },
+        {
+          "role": "user",
+          "content": "Mã máy của tôi là LT-411."
+        },
+        {
+          "role": "user",
+          "content": "Chỉ kiểm tra phần bảo mật và cập nhật bản vá (security) trên máy đó thôi."
+        }
+      ],
+      "failure_type": "missing_info",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "inspect_device",
+            "args": {
+              "asset_id": "LT-411",
+              "check": "security"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "multiturn_fill_asset_and_check",
+        "difficulty": "hard",
+        "what_it_tests": "Lấy mã máy LT-411 từ lượt 2 và kết hợp với check=security ở lượt 3."
+      }
+    },
+    {
+      "id": "G08_multiturn_correct_employee_id",
+      "phase": "B",
+      "suite": "group",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Tra cứu hồ sơ tài khoản nhân viên EMP-1001."
+        },
+        {
+          "role": "user",
+          "content": "À tôi nhớ nhầm, mã chính xác là EMP-1006."
+        },
+        {
+          "role": "user",
+          "content": "Xem thông tin tài khoản và thiết bị cấp phát của nhân viên EMP-1006 này."
+        }
+      ],
+      "failure_type": "wrong_arg_value",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "lookup_user",
+            "args": {
+              "employee_id": "EMP-1006"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "multiturn_correction",
+        "difficulty": "medium",
+        "what_it_tests": "Đính chính tham số: EMP-1006 ở lượt sau phải đè lên giá trị EMP-1001 trước đó."
+      }
+    },
+    {
+      "id": "G09_multiturn_switch_status_to_kb",
+      "phase": "B",
+      "suite": "group",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Kiểm tra xem hệ thống email production có bị lỗi gì không?"
+        },
+        {
+          "role": "user",
+          "content": "Thôi không cần kiểm tra trạng thái nữa, tìm giúp mình tài liệu hướng dẫn cấu hình email Outlook trên máy mới."
+        },
+        {
+          "role": "user",
+          "content": "Đúng vậy, chỉ cần tìm bài viết hướng dẫn thuộc nhóm email."
+        }
+      ],
+      "failure_type": "wrong_tool",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "search_kb",
+            "args": {
+              "category": "email"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "multiturn_intent_switch",
+        "difficulty": "hard",
+        "what_it_tests": "Người dùng đổi ý từ kiểm tra trạng thái sang tra cứu hướng dẫn, agent phải chuyển từ check_service_status sang search_kb."
+      }
+    },
+    {
+      "id": "G10_multiturn_ticket_confirmation",
+      "phase": "B",
+      "suite": "group",
+      "turns": [
+        {
+          "role": "user",
+          "content": "Tạo ticket giúp mình: Màn hình máy DT-031 bị chớp tắt liên tục, để độ ưu tiên low."
+        },
+        {
+          "role": "user",
+          "content": "À đổi độ ưu tiên thành high đi vì mình đang cần gấp."
+        },
+        {
+          "role": "user",
+          "content": "Xác nhận lại toàn bộ thông tin với mình trước khi gửi ticket vào hệ thống nhé."
+        }
+      ],
+      "failure_type": "wrong_boundary",
+      "expect": {
+        "tool_calls": [
+          {
+            "name": "clarify",
+            "args": {
+              "response_type": "yes_no"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "skill": "multiturn_ticket_confirmation_boundary",
+        "difficulty": "hard",
+        "what_it_tests": "Hành động có side-effect (tạo ticket) sau khi đổi thông tin phải dừng lại ở ranh giới hỏi xác nhận (clarify yes_no), không được tự ý gọi create_ticket khi chưa được confirm."
+      }
+    }
+  ]
 }
