@@ -270,6 +270,7 @@ def main() -> None:
     parser.add_argument("--tools", type=Path, default=ARTIFACTS_DIR / "tools.yaml")
     parser.add_argument("--eval-cases", type=Path, default=DATA_DIR / "eval_base.json")
     parser.add_argument("--runs-dir", type=Path, default=ROOT / "runs")
+    parser.add_argument("--resume-file", type=Path, default=None, help="Resume an existing run file and only re-run provider_error cases.")
     args = parser.parse_args()
 
     system_prompt = args.system_prompt.read_text(encoding="utf-8")
@@ -285,9 +286,25 @@ def main() -> None:
     validate_expected_tools(cases, tool_declarations, args.eval_cases)
     openai_tools = to_openai_tools(tool_declarations)
 
+    existing_results: dict[str, dict[str, Any]] = {}
+    old_payload: dict[str, Any] = {}
+    if args.resume_file and args.resume_file.exists():
+        old_payload = json.loads(args.resume_file.read_text(encoding="utf-8"))
+        for item in old_payload.get("results", []):
+            if item.get("result", {}).get("failure_type") != "provider_error":
+                existing_results[item["id"]] = item
+
+    import time
     results: list[dict[str, Any]] = []
     for case in cases:
-        print(f"Running {case['id']}...", flush=True)
+        cid = case["id"]
+        if cid in existing_results:
+            print(f"Using cached result for {cid} (PASS/FAIL without provider_error)")
+            results.append(existing_results[cid])
+            continue
+
+        print(f"Running {cid}...", flush=True)
+        time.sleep(0.5)
         agent = HelpdeskAgent(provider, system_prompt=system_prompt, tools=openai_tools, model=args.model)
         try:
             tool_choice = None if case["expect"].get("no_tool") else "required"
@@ -334,24 +351,31 @@ def main() -> None:
         safe_slug(args.provider),
         timestamp,
     ])
-    payload = {
-        "run_id": run_id,
-        "version": args.version,
-        **artifact_version_dict(artifact_version),
-        "phase": args.phase,
-        "suite": args.suite,
-        "provider": args.provider,
-        "model": selected_model,
-        "system_prompt": str(args.system_prompt),
-        "tools": str(args.tools),
-        "eval_cases": str(args.eval_cases),
-        **dataset_info,
-        "generated_at": generated_at,
-        "summary": summary,
-        "results": results,
-    }
+    if args.resume_file and args.resume_file.exists():
+        out_path = args.resume_file
+        payload = old_payload
+        payload["summary"] = summary
+        payload["results"] = results
+        payload["generated_at"] = generated_at
+    else:
+        payload = {
+            "run_id": run_id,
+            "version": args.version,
+            **artifact_version_dict(artifact_version),
+            "phase": args.phase,
+            "suite": args.suite,
+            "provider": args.provider,
+            "model": selected_model,
+            "system_prompt": str(args.system_prompt),
+            "tools": str(args.tools),
+            "eval_cases": str(args.eval_cases),
+            **dataset_info,
+            "generated_at": generated_at,
+            "summary": summary,
+            "results": results,
+        }
+        out_path = args.runs_dir / f"{run_id}.json"
 
-    out_path = args.runs_dir / f"{run_id}.json"
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print_table(results, summary)
     print(f"\nArtifact version: {artifact_version.artifact_version}")

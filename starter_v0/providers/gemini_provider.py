@@ -73,7 +73,7 @@ class GeminiProvider:
         self,
         *,
         api_key_env: str = "GEMINI_API_KEY",
-        default_model: str = "gemini-3.5-flash",
+        default_model: str = "gemini-3.6-flash",
     ) -> None:
         self.api_key_env = api_key_env
         self.default_model = default_model
@@ -99,18 +99,35 @@ class GeminiProvider:
 
         system_instruction, contents = _to_gemini_contents(messages)
         declarations = _to_gemini_declarations(tools)
-        config_kwargs: dict[str, Any] = {"temperature": temperature}
+        config_kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+        }
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
         if declarations:
             config_kwargs["tools"] = [types.Tool(function_declarations=declarations)]
 
         client = genai.Client(api_key=api_key)
-        resp = client.models.generate_content(
-            model=model or self.default_model,
-            contents=contents,
-            config=types.GenerateContentConfig(**config_kwargs),
-        )
+        for attempt in range(6):
+            try:
+                resp = client.models.generate_content(
+                    model=model or self.default_model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(**config_kwargs),
+                )
+                break
+            except Exception as exc:
+                if (
+                    "429" in str(exc)
+                    or "RESOURCE_EXHAUSTED" in str(exc)
+                    or "503" in str(exc)
+                    or "UNAVAILABLE" in str(exc)
+                ) and attempt < 5:
+                    import time
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                raise
 
         text_parts: list[str] = []
         calls: list[ToolCall] = []
