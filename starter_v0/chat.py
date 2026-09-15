@@ -77,6 +77,27 @@ def assistant_tool_message(response_text: str | None, calls: list[ToolCall]) -> 
     }
 
 
+def display_tool_event(call: ToolCall, event: dict[str, Any], version: str = "") -> None:
+    result = event.get("result", {})
+    is_error = isinstance(result, dict) and ("error" in result or result.get("status") == "error")
+    version_tag = f" [{version}]" if version else ""
+
+    print(f"\n┌── ⚙️  TOOL CALL{version_tag}: \033[1;36m{call.name}\033[0m")
+    args_json = json.dumps(call.args, ensure_ascii=False, indent=2)
+    indented_args = args_json.replace("\n", "\n│      ")
+    print(f"│   📥 \033[1;33mInput Payload:\033[0m\n│      {indented_args}")
+
+    if is_error:
+        err_json = json.dumps(result, ensure_ascii=False, indent=2)
+        indented_err = err_json.replace("\n", "\n│      ")
+        print(f"│   ❌ \033[1;31mTool Error:\033[0m\n│      {indented_err}")
+    else:
+        res_json = json_text(result, max_chars=1200)
+        indented_res = res_json.replace("\n", "\n│      ")
+        print(f"│   📤 \033[1;32mTool Result:\033[0m\n│      {indented_res}")
+    print("└────────────────────────────────────────────────────────")
+
+
 def run_model_tool_loop(
     *,
     provider: Any,
@@ -84,6 +105,7 @@ def run_model_tool_loop(
     tools: list[dict[str, Any]],
     model: str | None,
     max_tool_rounds: int,
+    version: str = "",
 ) -> dict[str, Any]:
     working_messages = list(messages)
     rounds: list[dict[str, Any]] = []
@@ -112,10 +134,10 @@ def run_model_tool_loop(
         non_clarification_events: list[dict[str, Any]] = []
 
         for call in calls:
-            print(f"[tool] {call.name}({json.dumps(call.args, ensure_ascii=True, sort_keys=True)})")
             event = execute_tool_call(call)
             round_record["tool_results"].append(event)
             all_tool_events.append(event)
+            display_tool_event(call, event, version=version)
 
             # Detect the clarification/pause tool by its output flag (rename-proof),
             # not by a hard-coded tool name.
@@ -189,14 +211,19 @@ def main() -> None:
         "turns": [],
     }
 
-    print(f"IT Helpdesk Agent chat. artifact_version={artifact_version.artifact_version}")
-    print("Type /exit to stop.")
+    print("=" * 65)
+    print(" 🤖 IT HELPDESK AGENT CHAT INTERFACE")
+    print(f" 📌 Version: \033[1;32m{args.version}\033[0m | Artifact: {artifact_version.artifact_version}")
+    print(f" 🌐 Provider: {args.provider} | Model: {selected_model}")
+    print(f" 📝 Transcript file: {transcript_path.name}")
+    print(" 💡 Gõ '/exit' hoặc '/quit' để kết thúc phiên hội thoại.")
+    print("=" * 65)
 
     history: list[dict[str, str]] = []
     turn_index = 0
     while True:
         try:
-            user_text = input("\nYou> ").strip()
+            user_text = input(f"\n👤 You [{args.version}]> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -230,10 +257,11 @@ def main() -> None:
                 tools=openai_tools,
                 model=args.model,
                 max_tool_rounds=args.max_tool_rounds,
+                version=args.version,
             )
             turn_record.update(result)
             assistant_text = result["assistant_text"]
-            print(f"\nAgent> {assistant_text}")
+            print(f"\n💬 Agent [{args.version}]> {assistant_text}")
             history.append({"role": "user", "content": user_text})
             history.append({"role": "assistant", "content": assistant_text})
         except Exception as exc:

@@ -99,3 +99,13 @@ tools:
         asset_id: {type: string, default: "", description: "Mã tài sản liên quan nếu có"}
         confirmed: {type: boolean, default: false, description: "Đã có xác nhận của người dùng hay chưa"}
       required: [summary]
+
+  # ---------------- Bonus tools (Team-authored) ----------------
+  - name: check_hardware_warranty
+    description: "Tra cứu thông tin và thời hạn bảo hành phần cứng của thiết bị theo mã tài sản (asset_id). Cho biết ngày mua, ngày hết hạn bảo hành, trạng thái bảo hành (active, expiring_soon, expired) và số ngày còn lại."
+    parameters:
+      type: object
+      properties:
+        asset_id: {type: string, description: "Mã tài sản công ty, ví dụ LT-204, LT-318, DT-031"}
+      required: [asset_id]
+
