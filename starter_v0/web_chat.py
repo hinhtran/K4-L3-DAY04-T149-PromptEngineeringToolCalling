@@ -1,6 +1,6 @@
 """Light-themed Web Demo UI for IT Helpdesk Agent.
 Supports switching between versions (v0, v1, v2, v3) and providers (openrouter, gemini).
-Displays real-time Tool Calls, Input Payloads, Results, and Errors.
+Displays real-time Tool Calls, Input Payloads, Results, Errors, and parsed Agent replies.
 Automatically saves transcripts to starter_v0/transcripts/.
 """
 from __future__ import annotations
@@ -30,6 +30,61 @@ SYSTEM_PROMPT_PATH = ROOT / "artifacts" / "system_prompt.md"
 TOOLS_PATH = ROOT / "artifacts" / "tools.yaml"
 TRANSCRIPTS_DIR = ROOT / "transcripts"
 TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Preset prompts for live demo version comparison (v0 vs v1 vs v2 vs v3)
+V0_PROMPT = """## Identity
+You are an internal IT service desk assistant for the fictional company Northstar Labs.
+
+## Rules
+- Help users inspect tickets, assets, knowledge articles and company policy.
+- Be concise and use tool results as evidence.
+
+## Capabilities
+You may use the declared service desk tools.
+
+## Constraints
+If a request is outside the service desk domain, say what you can help with.
+
+## Output format
+Return valid JSON with exactly these top-level fields: `intent`, `action`, `reply`, `evidence_ids`.
+Use `evidence_ids` as an array. Define consistent values for `intent` and `action` from observed traces.
+"""
+
+V1_PROMPT = """## Identity & Scope
+You are an internal IT service desk assistant for Northstar Labs.
+
+## Protocols
+1. Missing Information: When a user asks to diagnose or inspect a personal device without an explicit Asset ID, invoke clarify(question=..., response_type="text") to ask for the Asset ID. Do not call inspect_device without an Asset ID.
+2. Specific Target: When inspecting a device for a specific symptom (vpn, network, security, hardware), set check to that specific target instead of all.
+
+## Output format
+Return valid JSON with exactly these top-level fields: `intent`, `action`, `reply`, `evidence_ids`.
+"""
+
+V2_PROMPT = """## Identity & Scope
+You are an internal IT service desk assistant for Northstar Labs.
+
+## Protocols
+1. Missing Information: When Asset ID is missing for personal device inspection, invoke clarify(question=..., response_type="text").
+2. Confirmation Boundary: Creating an IT ticket (create_ticket) is a state-changing action. If the user has not explicitly confirmed in the conversation, invoke clarify(question=..., response_type="yes_no") to request confirmation first.
+3. Invalidation on Mutation: In multi-turn conversations, if ticket parameters (priority, summary) are modified, prior confirmation is invalidated; request confirmation again.
+
+## Output format
+Return valid JSON with exactly these top-level fields: `intent`, `action`, `reply`, `evidence_ids`.
+"""
+
+
+def get_system_prompt_for_version(version: str) -> str:
+    """Returns the appropriate prompt for version comparison during live demo."""
+    if version == "v0":
+        return V0_PROMPT
+    if version == "v1":
+        return V1_PROMPT
+    if version == "v2":
+        return V2_PROMPT
+    # v3 represents the full, comprehensive prompt from Track A
+    return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+
 
 HTML_CONTENT = """<!DOCTYPE html>
 <html lang="vi">
@@ -109,6 +164,14 @@ HTML_CONTENT = """<!DOCTYPE html>
     .message.user .bubble { background: var(--primary); color: white; border-bottom-right-radius: 3px; }
     .message.assistant .bubble { background: #f8fafc; border: 1px solid var(--border); color: #1e293b; border-bottom-left-radius: 3px; }
 
+    .evidence-tag {
+      display: inline-block; background: #e0e7ff; color: #3730a3; font-size: 0.75rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 4px; margin-top: 6px; margin-right: 4px;
+    }
+    .intent-meta {
+      font-size: 0.75rem; color: #94a3b8; font-style: italic; margin-top: 4px;
+    }
+
     /* Tool Call Card */
     .tool-card {
       align-self: flex-start; width: 100%; max-width: 780px; background: var(--tool-bg);
@@ -126,6 +189,18 @@ HTML_CONTENT = """<!DOCTYPE html>
       background: var(--card-bg); border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px;
       font-size: 0.8rem; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, monospace; color: #1e293b;
     }
+
+    /* Clarification Callout */
+    .clarify-callout {
+      background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid var(--primary);
+      padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; color: #1e40af; margin-top: 6px;
+    }
+    .clarify-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .action-btn {
+      padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer;
+    }
+    .action-btn.confirm { background: var(--primary); color: white; }
+    .action-btn.cancel { background: #e2e8f0; color: #475569; }
 
     /* Suggestion Chips */
     .chips-bar {
@@ -171,8 +246,8 @@ HTML_CONTENT = """<!DOCTYPE html>
         <div class="version-pills">
           <button class="version-btn active" onclick="setVersion('v0')">v0 (Baseline)</button>
           <button class="version-btn" onclick="setVersion('v1')">v1 (Prompt)</button>
-          <button class="version-btn" onclick="setVersion('v2')">v2 (Tools)</button>
-          <button class="version-btn" onclick="setVersion('v3')">v3 (Safe)</button>
+          <button class="version-btn" onclick="setVersion('v2')">v2 (Boundary)</button>
+          <button class="version-btn" onclick="setVersion('v3')">v3 (Safe & Full)</button>
         </div>
       </div>
       <div class="selector-group">
@@ -189,16 +264,16 @@ HTML_CONTENT = """<!DOCTYPE html>
     <div id="chat-history" class="chat-history">
       <div class="message assistant">
         <div class="sender-label">Agent (v0)</div>
-        <div class="bubble">Xin chào! Tôi là Trợ lý IT Helpdesk. Bạn có thể hỏi tôi về trạng thái dịch vụ (VPN, SSO, Wi-Fi), chẩn đoán thiết bị, tra cứu nhân viên, thông tin bảo hành (Bonus), hoặc tạo ticket hỗ trợ.</div>
+        <div class="bubble">Xin chào! Tôi là Trợ lý IT Helpdesk. Bạn có thể hỏi tôi về trạng thái dịch vụ (VPN, SSO, Wi-Fi), chẩn đoán thiết bị, tra cứu nhân viên, thông tin bảo hành (Bonus Tool), hoặc tạo ticket hỗ trợ kỹ thuật.</div>
       </div>
     </div>
 
     <div class="chips-bar">
       <div class="chip" onclick="quickAsk('Kiểm tra tình trạng bảo hành của laptop LT-204 giúp mình.')">🔍 Bảo hành LT-204 (Bonus)</div>
+      <div class="chip" onclick="quickAsk('Laptop của mình không kết nối được Wi-Fi, hãy kiểm tra máy giúp mình.')">❓ Thiếu Asset ID (Clarify)</div>
       <div class="chip" onclick="quickAsk('Kiểm tra kết nối mạng trên máy LT-240.')">💻 Chẩn đoán LT-240</div>
       <div class="chip" onclick="quickAsk('Dịch vụ VPN trên production hiện có ổn định không?')">🌐 VPN Production</div>
-      <div class="chip" onclick="quickAsk('Tra cứu thông tin tài khoản của nhân viên EMP-1005.')">👤 Nhân viên EMP-1005</div>
-      <div class="chip" onclick="quickAsk('Tạo ticket sự cố màn hình máy DT-031 bị chớp tắt, mức ưu tiên high.')">🎫 Tạo ticket DT-031</div>
+      <div class="chip" onclick="quickAsk('Tạo ticket sự cố màn hình máy DT-031 bị chớp tắt, mức ưu tiên high.')">🎫 Tạo ticket (Boundary)</div>
     </div>
 
     <footer>
@@ -216,7 +291,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       document.querySelectorAll('.version-btn').forEach(btn => {
         btn.classList.toggle('active', btn.textContent.includes(ver));
       });
-      addSystemNotification(`Đã chuyển sang phiên bản <b>${ver}</b>`);
+      addSystemNotification(`Đã chuyển sang phiên bản <b>${ver}</b>. Các lượt hội thoại tiếp theo sẽ áp dụng prompt tương ứng của ${ver}.`);
     }
 
     function switchProvider() {
@@ -242,9 +317,31 @@ HTML_CONTENT = """<!DOCTYPE html>
       if (e.key === 'Enter') sendMessage();
     }
 
-    async function sendMessage() {
+    function parseAgentResponse(rawText) {
+      if (!rawText) return { reply: '(Không có phản hồi dạng text)', intent: '', action: '', evidence_ids: [] };
+      let text = rawText.trim();
+      if (text.startsWith("```json")) {
+        text = text.replace(/^```json\\s*/, '').replace(/```\\s*$/, '').trim();
+      } else if (text.startsWith("```")) {
+        text = text.replace(/^```\\s*/, '').replace(/```\\s*$/, '').trim();
+      }
+      try {
+        const obj = JSON.parse(text);
+        if (obj && typeof obj === 'object') {
+          return {
+            reply: obj.reply || text,
+            intent: obj.intent || '',
+            action: obj.action || '',
+            evidence_ids: Array.isArray(obj.evidence_ids) ? obj.evidence_ids : []
+          };
+        }
+      } catch (e) {}
+      return { reply: rawText, intent: '', action: '', evidence_ids: [] };
+    }
+
+    async function sendMessage(overrideText) {
       const input = document.getElementById('user-input');
-      const text = input.value.trim();
+      const text = overrideText || input.value.trim();
       if (!text) return;
 
       const provider = document.getElementById('provider-select').value;
@@ -256,7 +353,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       userMsg.className = 'message user';
       userMsg.innerHTML = `<div class="sender-label">Bạn</div><div class="bubble">${escapeHtml(text)}</div>`;
       historyDiv.appendChild(userMsg);
-      input.value = '';
+      if (!overrideText) input.value = '';
       sendBtn.disabled = true;
 
       // Loading
@@ -280,6 +377,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         });
         const data = await res.json();
         loading.remove();
+
+        let hasClarification = false;
+        let clarifyQuestion = "";
 
         // Render Tool Calls (if any)
         if (data.tool_events && data.tool_events.length > 0) {
@@ -306,15 +406,52 @@ HTML_CONTENT = """<!DOCTYPE html>
               </div>
             `;
             historyDiv.appendChild(toolCard);
+
+            if (ev.tool === 'clarify' || (ev.result && ev.result.awaiting_user)) {
+              hasClarification = true;
+              clarifyQuestion = (ev.result && ev.result.question) || (ev.args && ev.args.question) || "Agent yêu cầu xác nhận hoặc bổ sung thông tin.";
+            }
           });
         }
+
+        // Parse structured JSON reply
+        const parsed = parseAgentResponse(data.assistant_text);
 
         // Render Assistant text
         const agentMsg = document.createElement('div');
         agentMsg.className = 'message assistant';
+
+        let evidenceHtml = '';
+        if (parsed.evidence_ids && parsed.evidence_ids.length > 0) {
+          evidenceHtml = '<div style="margin-top:6px">' + parsed.evidence_ids.map(id => `<span class="evidence-tag">📌 ${escapeHtml(id)}</span>`).join('') + '</div>';
+        }
+
+        let metaHtml = '';
+        if (parsed.intent || parsed.action) {
+          metaHtml = `<div class="intent-meta">intent: <b>${escapeHtml(parsed.intent)}</b> | action: <b>${escapeHtml(parsed.action)}</b></div>`;
+        }
+
+        let calloutHtml = '';
+        if (hasClarification) {
+          calloutHtml = `
+            <div class="clarify-callout">
+              <b>⚠️ Cần người dùng tương tác:</b> ${escapeHtml(clarifyQuestion)}
+              <div class="clarify-actions">
+                <button class="action-btn confirm" onclick="sendMessage('Tôi đồng ý và xác nhận thông tin trên.')">Xác nhận</button>
+                <button class="action-btn cancel" onclick="sendMessage('Hủy bỏ yêu cầu này.')">Hủy bỏ</button>
+              </div>
+            </div>
+          `;
+        }
+
         agentMsg.innerHTML = `
           <div class="sender-label">Agent [${currentVersion}] (${provider})</div>
-          <div class="bubble">${formatMarkdown(data.assistant_text || '(Không có phản hồi dạng text)')}</div>
+          <div class="bubble">
+            ${formatMarkdown(parsed.reply)}
+            ${evidenceHtml}
+            ${calloutHtml}
+            ${metaHtml}
+          </div>
         `;
         historyDiv.appendChild(agentMsg);
 
@@ -344,6 +481,8 @@ HTML_CONTENT = """<!DOCTYPE html>
       let s = escapeHtml(str);
       // bold
       s = s.replace(/\\*\\*(.*?)\\*\\*/g, '<b>$1</b>');
+      // line breaks to <br>
+      s = s.replace(/\\n/g, '<br>');
       return s;
     }
   </script>
@@ -373,8 +512,8 @@ class DemoHTTPHandler(SimpleHTTPRequestHandler):
                 provider_name = payload.get("provider", "openrouter")
                 history = payload.get("history", [])
 
-                # Run Agent Loop
-                system_prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+                # Run Agent Loop with dynamic version-based system prompt
+                system_prompt = get_system_prompt_for_version(version)
                 tool_declarations = load_tool_declarations(TOOLS_PATH)
                 openai_tools = to_openai_tools(tool_declarations)
                 provider = make_provider(provider_name)
